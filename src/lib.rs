@@ -30,11 +30,15 @@ mod chip;
 mod instructions;
 pub use chip::*;
 pub use instructions::*;
+#[cfg(feature = "sha256")]
 mod macros;
+#[cfg(feature = "sha256")]
 pub use halo2_dynamic_sha256;
+#[cfg(feature = "sha256")]
 use halo2_dynamic_sha256::{
     AssignedHashResult, Field, Sha256CompressionConfig, Sha256DynamicConfig,
 };
+#[cfg(feature = "sha256")]
 pub use macros::*;
 
 #[cfg(target_arch = "wasm32")]
@@ -165,6 +169,7 @@ impl<'v, F: PrimeField> AssignedRSASignature<'v, F> {
     }
 }
 
+#[cfg(feature = "sha256")]
 /// A circuit implementation to verify pkcs1v15 signatures.
 #[derive(Clone, Debug)]
 pub struct RSASignatureVerifier<F: Field> {
@@ -172,6 +177,7 @@ pub struct RSASignatureVerifier<F: Field> {
     sha256_config: Sha256DynamicConfig<F>,
 }
 
+#[cfg(feature = "sha256")]
 impl<F: Field> RSASignatureVerifier<F> {
     /// Creates new [`RSASignatureVerifier`] from [`RSAChip`] and [`Sha256BitChip`].
     ///
@@ -238,6 +244,7 @@ impl<F: Field> RSASignatureVerifier<F> {
     }
 }
 
+#[cfg(feature = "sha256")]
 #[cfg(test)]
 mod test {
     use super::*;
