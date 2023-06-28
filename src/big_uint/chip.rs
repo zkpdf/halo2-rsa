@@ -441,7 +441,7 @@ impl<F: PrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         let mut acc = self.assign_constant(ctx, BigUint::one())?;
         let zero = gate.load_zero(ctx);
         acc = acc.extend_limbs(num_limbs - acc.num_limbs(), zero);
-        let mut squared = a.clone();
+        let mut squared: AssignedBigUint<'v, F, Fresh> = a.clone();
         for e_bit in e_bits.into_iter() {
             // Compute `acc * squared`.
             let muled = self.mul_mod(ctx, &acc, &squared, n)?;
@@ -478,7 +478,7 @@ impl<F: PrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         let mut acc = self.assign_constant(ctx, BigUint::from(1usize))?;
         let zero = self.gate().load_zero(ctx);
         acc = acc.extend_limbs(num_limbs - acc.num_limbs(), zero);
-        let mut squared = a.clone();
+        let mut squared: AssignedBigUint<'v, F, Fresh> = a.clone();
         for e_bit in e_bits.into_iter() {
             let cur_sq = squared;
             // Square `squared`.

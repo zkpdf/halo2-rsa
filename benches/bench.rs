@@ -31,7 +31,7 @@ use halo2_base::{
     utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, modulus, PrimeField},
     AssignedValue, Context,
 };
-use halo2_dynamic_sha256::{Field, Sha256CompressionConfig, Sha256DynamicConfig};
+use halo2_dynamic_sha256::Sha256DynamicConfig;
 use halo2_ecc::bigint::{
     big_is_equal, big_is_zero, big_less_than, carry_mod, mul_no_carry, negative, select, sub,
     CRTInteger, FixedCRTInteger, FixedOverflowInteger, OverflowInteger,
@@ -62,7 +62,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_1024_64_enabled,
     1024,
     64,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -74,7 +75,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_1024_128_enabled,
     1024,
     128,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -86,7 +88,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_1024_1024_enabled,
     1024,
     1024,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -98,7 +101,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_64_enabled,
     2048,
     64,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -110,7 +114,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_128_enabled,
     2048,
     128,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -122,7 +127,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_1024_enabled,
     2048,
     1024,
-    1,
+    8,
+    8,
     13,
     true
 );
@@ -134,7 +140,8 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_10240_enabled,
     2048,
     10240,
-    10,
+    8,
+    80,
     13,
     true
 );
@@ -146,8 +153,9 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_1024_disabled,
     2048,
     1024,
-    1,
-    13,
+    16,
+    2,
+    17,
     false
 );
 
@@ -291,8 +299,8 @@ fn bench_pkcs1v15_2048_disabled(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_pkcs1v15_1024_enabled,
+    // bench_pkcs1v15_1024_enabled,
     // bench_pkcs1v15_2048_enabled,
-    // bench_pkcs1v15_2048_disabled
+    bench_pkcs1v15_2048_disabled
 );
 criterion_main!(benches);

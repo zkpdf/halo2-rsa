@@ -35,9 +35,7 @@ mod macros;
 #[cfg(feature = "sha256")]
 pub use halo2_dynamic_sha256;
 #[cfg(feature = "sha256")]
-use halo2_dynamic_sha256::{
-    AssignedHashResult, Field, Sha256CompressionConfig, Sha256DynamicConfig,
-};
+use halo2_dynamic_sha256::{AssignedHashResult, Sha256DynamicConfig};
 #[cfg(feature = "sha256")]
 pub use macros::*;
 
@@ -172,13 +170,13 @@ impl<'v, F: PrimeField> AssignedRSASignature<'v, F> {
 #[cfg(feature = "sha256")]
 /// A circuit implementation to verify pkcs1v15 signatures.
 #[derive(Clone, Debug)]
-pub struct RSASignatureVerifier<F: Field> {
+pub struct RSASignatureVerifier<F: PrimeField> {
     rsa_config: RSAConfig<F>,
     sha256_config: Sha256DynamicConfig<F>,
 }
 
 #[cfg(feature = "sha256")]
-impl<F: Field> RSASignatureVerifier<F> {
+impl<F: PrimeField> RSASignatureVerifier<F> {
     /// Creates new [`RSASignatureVerifier`] from [`RSAChip`] and [`Sha256BitChip`].
     ///
     /// # Arguments
@@ -256,7 +254,7 @@ mod test {
         plonk::{Circuit, Column, ConstraintSystem, Instance},
     };
     use halo2_base::{gates::range::RangeStrategy::Vertical, ContextParams, SKIP_FIRST_PASS};
-    use halo2_dynamic_sha256::{Field, Sha256DynamicConfig};
+    use halo2_dynamic_sha256::Sha256DynamicConfig;
 
     use num_bigint::RandomBits;
     use num_traits::FromPrimitive;
@@ -267,21 +265,21 @@ mod test {
     macro_rules! impl_rsa_signature_test_circuit {
         ($config_name:ident, $circuit_name:ident, $test_fn_name:ident, $bits_len:expr, $msg_len:expr, $num_advice:expr, $num_lookup_advice:expr, $lookup_bits:expr, $k:expr, $should_be_error:expr, $( $synth:tt )*) => {
             #[derive(Debug,Clone)]
-            struct $config_name<F:Field> {
+            struct $config_name<F:PrimeField> {
                 rsa_config: RSAConfig<F>,
                 sha256_config: Sha256DynamicConfig<F>,
                 n_instance: Column<Instance>,
                 hash_instance: Column<Instance>
             }
 
-            struct $circuit_name<F: Field> {
+            struct $circuit_name<F: PrimeField> {
                 private_key: RsaPrivateKey,
                 public_key: RsaPublicKey,
                 msg: Vec<u8>,
                 _f: PhantomData<F>
             }
 
-            impl<F: Field> $circuit_name<F> {
+            impl<F: PrimeField> $circuit_name<F> {
                 const BITS_LEN:usize = $bits_len;
                 const MSG_LEN:usize = $msg_len;
                 const EXP_LIMB_BITS:usize = 5;
@@ -290,10 +288,11 @@ mod test {
                 const NUM_FIXED:usize = 1;
                 const NUM_LOOKUP_ADVICE:usize = $num_lookup_advice;
                 const LOOKUP_BITS:usize = $lookup_bits;
-                const NUM_SHA2_COMP:usize = 1;
+                const SHA256_LOOKUP_BITS:usize = 8;
+                const SHA256_LOOKUP_ADVICE:usize = 8;
             }
 
-            impl<F: Field> Circuit<F> for $circuit_name<F> {
+            impl<F: PrimeField> Circuit<F> for $circuit_name<F> {
                 type Config = $config_name<F>;
                 type FloorPlanner = SimpleFloorPlanner;
 
@@ -305,10 +304,7 @@ mod test {
                     let range_config = RangeConfig::configure(meta,Vertical, &[Self::NUM_ADVICE], &[Self::NUM_LOOKUP_ADVICE], Self::NUM_FIXED, Self::LOOKUP_BITS, 0, $k);
                     let bigint_config = BigUintConfig::construct(range_config.clone(), 64);
                     let rsa_config = RSAConfig::construct(bigint_config, Self::BITS_LEN, Self::EXP_LIMB_BITS);
-                    let sha256_bit_configs = (0..Self::NUM_SHA2_COMP)
-                        .map(|_| Sha256CompressionConfig::configure(meta))
-                        .collect();
-                    let sha256_config = Sha256DynamicConfig::construct(sha256_bit_configs, vec![Self::MSG_LEN], range_config);
+                    let sha256_config = Sha256DynamicConfig::configure(meta,vec![Self::MSG_LEN], range_config,Self::SHA256_LOOKUP_BITS,Self::SHA256_LOOKUP_ADVICE,true);
                     let n_instance = meta.instance_column();
                     let hash_instance = meta.instance_column();
                     meta.enable_equality(n_instance);
@@ -327,7 +323,7 @@ mod test {
 
             #[test]
             fn $test_fn_name() {
-                fn run<F: Field>() {
+                fn run<F: PrimeField>() {
                     let mut rng = thread_rng();
                     let private_key = RsaPrivateKey::new(&mut rng, $circuit_name::<F>::BITS_LEN).expect("failed to generate a key");
                     let public_key = RsaPublicKey::from(&private_key);
@@ -370,10 +366,10 @@ mod test {
         test_rsa_signature_with_hash_circuit1,
         2048,
         1024,
-        50,
-        4,
+        80,
+        16,
         12,
-        13,
+        15,
         false,
         fn synthesize(
             &self,
@@ -381,7 +377,7 @@ mod test {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             let biguint_config = config.rsa_config.biguint_config();
-
+            config.sha256_config.load(&mut layouter)?;
             biguint_config.range().load_lookup_table(&mut layouter)?;
             let mut first_pass = SKIP_FIRST_PASS;
             let (public_key_cells, hashed_msg_cells) = layouter.assign_region(
@@ -458,11 +454,11 @@ mod test {
         TestRSASignatureWithHashCircuit2,
         test_rsa_signature_with_hash_circuit2,
         2048,
-        7104,
-        61,
-        5,
+        2048,
+        100,
+        16,
         12,
-        13,
+        15,
         false,
         fn synthesize(
             &self,
@@ -470,7 +466,7 @@ mod test {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             let biguint_config = config.rsa_config.biguint_config();
-
+            config.sha256_config.load(&mut layouter)?;
             biguint_config.range().load_lookup_table(&mut layouter)?;
             let mut first_pass = SKIP_FIRST_PASS;
             let (public_key_cells, hashed_msg_cells) = layouter.assign_region(
@@ -548,10 +544,10 @@ mod test {
         test_bad_rsa_signature_with_hash_circuit1,
         2048,
         1024,
-        50,
-        4,
+        80,
+        16,
         12,
-        13,
+        15,
         true,
         fn synthesize(
             &self,
@@ -559,7 +555,7 @@ mod test {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             let biguint_config = config.rsa_config.biguint_config();
-
+            config.sha256_config.load(&mut layouter)?;
             biguint_config.range().load_lookup_table(&mut layouter)?;
             let mut first_pass = SKIP_FIRST_PASS;
             let (public_key_cells, hashed_msg_cells) = layouter.assign_region(
