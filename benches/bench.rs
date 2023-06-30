@@ -55,31 +55,31 @@ use std::{
     path::Path,
 };
 
-impl_pkcs1v15_basic_circuit!(
-    Pkcs1v15_1024_64EnabledBenchConfig,
-    Pkcs1v15_1024_64EnabledBenchCircuit,
-    setup_pkcs1v15_1024_64_enabled,
-    prove_pkcs1v15_1024_64_enabled,
-    1024,
-    64,
-    8,
-    8,
-    13,
-    true
-);
+// impl_pkcs1v15_basic_circuit!(
+//     Pkcs1v15_1024_64EnabledBenchConfig,
+//     Pkcs1v15_1024_64EnabledBenchCircuit,
+//     setup_pkcs1v15_1024_64_enabled,
+//     prove_pkcs1v15_1024_64_enabled,
+//     1024,
+//     80,
+//     16,
+//     8,
+//     15,
+//     true
+// );
 
-impl_pkcs1v15_basic_circuit!(
-    Pkcs1v15_1024_128EnabledBenchConfig,
-    Pkcs1v15_1024_128EnabledBenchCircuit,
-    setup_pkcs1v15_1024_128_enabled,
-    prove_pkcs1v15_1024_128_enabled,
-    1024,
-    128,
-    8,
-    8,
-    13,
-    true
-);
+// impl_pkcs1v15_basic_circuit!(
+//     Pkcs1v15_1024_128EnabledBenchConfig,
+//     Pkcs1v15_1024_128EnabledBenchCircuit,
+//     setup_pkcs1v15_1024_128_enabled,
+//     prove_pkcs1v15_1024_128_enabled,
+//     1024,
+//     128,
+//     8,
+//     8,
+//     13,
+//     true
+// );
 
 impl_pkcs1v15_basic_circuit!(
     Pkcs1v15_1024_1024EnabledBenchConfig,
@@ -88,37 +88,39 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_1024_1024_enabled,
     1024,
     1024,
-    8,
-    8,
-    13,
+    3,
+    1,
+    16,
+    1,
+    19,
     true
 );
 
-impl_pkcs1v15_basic_circuit!(
-    Pkcs1v15_2048_64EnabledBenchConfig,
-    Pkcs1v15_2048_64EnabledBenchCircuit,
-    setup_pkcs1v15_2048_64_enabled,
-    prove_pkcs1v15_2048_64_enabled,
-    2048,
-    64,
-    8,
-    8,
-    13,
-    true
-);
+// impl_pkcs1v15_basic_circuit!(
+//     Pkcs1v15_2048_64EnabledBenchConfig,
+//     Pkcs1v15_2048_64EnabledBenchCircuit,
+//     setup_pkcs1v15_2048_64_enabled,
+//     prove_pkcs1v15_2048_64_enabled,
+//     2048,
+//     64,
+//     8,
+//     8,
+//     13,
+//     true
+// );
 
-impl_pkcs1v15_basic_circuit!(
-    Pkcs1v15_2048_128EnabledBenchConfig,
-    Pkcs1v15_2048_128EnabledBenchCircuit,
-    setup_pkcs1v15_2048_128_enabled,
-    prove_pkcs1v15_2048_128_enabled,
-    2048,
-    128,
-    8,
-    8,
-    13,
-    true
-);
+// impl_pkcs1v15_basic_circuit!(
+//     Pkcs1v15_2048_128EnabledBenchConfig,
+//     Pkcs1v15_2048_128EnabledBenchCircuit,
+//     setup_pkcs1v15_2048_128_enabled,
+//     prove_pkcs1v15_2048_128_enabled,
+//     2048,
+//     128,
+//     8,
+//     8,
+//     13,
+//     true
+// );
 
 impl_pkcs1v15_basic_circuit!(
     Pkcs1v15_2048_1024EnabledBenchConfig,
@@ -127,9 +129,11 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_1024_enabled,
     2048,
     1024,
-    8,
-    8,
-    13,
+    3,
+    1,
+    16,
+    1,
+    19,
     true
 );
 
@@ -140,9 +144,11 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_10240_enabled,
     2048,
     10240,
-    8,
-    80,
-    13,
+    21,
+    4,
+    16,
+    2,
+    19,
     true
 );
 
@@ -153,9 +159,11 @@ impl_pkcs1v15_basic_circuit!(
     prove_pkcs1v15_2048_1024_disabled,
     2048,
     1024,
+    1,
+    1,
     16,
-    2,
-    17,
+    1,
+    19,
     false
 );
 
@@ -186,30 +194,30 @@ fn save_params_pk_and_vk(
 fn bench_pkcs1v15_1024_enabled(c: &mut Criterion) {
     let mut group = c.benchmark_group("pkcs1v15, 1024 bit public key, sha2 enabled");
     group.sample_size(10);
-    let (params, vk, pk) = setup_pkcs1v15_1024_64_enabled();
-    save_params_pk_and_vk(
-        "benches/params_1024_64.bin",
-        "benches/1024_64.pk",
-        "benches/1024_64.vk",
-        &params,
-        &pk,
-        &vk,
-    );
-    group.bench_function("message 64 bytes", |b| {
-        b.iter(|| prove_pkcs1v15_1024_64_enabled(&params, &vk, &pk))
-    });
-    let (params, vk, pk) = setup_pkcs1v15_1024_128_enabled();
-    save_params_pk_and_vk(
-        "benches/params_1024_128.bin",
-        "benches/1024_128.pk",
-        "benches/1024_128.vk",
-        &params,
-        &pk,
-        &vk,
-    );
-    group.bench_function("message 128 bytes", |b| {
-        b.iter(|| prove_pkcs1v15_1024_128_enabled(&params, &vk, &pk))
-    });
+    // let (params, vk, pk) = setup_pkcs1v15_1024_64_enabled();
+    // save_params_pk_and_vk(
+    //     "benches/params_1024_64.bin",
+    //     "benches/1024_64.pk",
+    //     "benches/1024_64.vk",
+    //     &params,
+    //     &pk,
+    //     &vk,
+    // );
+    // group.bench_function("message 64 bytes", |b| {
+    //     b.iter(|| prove_pkcs1v15_1024_64_enabled(&params, &vk, &pk))
+    // });
+    // let (params, vk, pk) = setup_pkcs1v15_1024_128_enabled();
+    // save_params_pk_and_vk(
+    //     "benches/params_1024_128.bin",
+    //     "benches/1024_128.pk",
+    //     "benches/1024_128.vk",
+    //     &params,
+    //     &pk,
+    //     &vk,
+    // );
+    // group.bench_function("message 128 bytes", |b| {
+    //     b.iter(|| prove_pkcs1v15_1024_128_enabled(&params, &vk, &pk))
+    // });
     let (params, vk, pk) = setup_pkcs1v15_1024_1024_enabled();
     save_params_pk_and_vk(
         "benches/params_1024_1024.bin",
@@ -228,30 +236,30 @@ fn bench_pkcs1v15_1024_enabled(c: &mut Criterion) {
 fn bench_pkcs1v15_2048_enabled(c: &mut Criterion) {
     let mut group = c.benchmark_group("pkcs1v15, 2048 bit public key, sha2 enabled");
     group.sample_size(10);
-    let (params, vk, pk) = setup_pkcs1v15_2048_64_enabled();
-    save_params_pk_and_vk(
-        "benches/params_2048_64.bin",
-        "benches/2048_64.pk",
-        "benches/2048_64.vk",
-        &params,
-        &pk,
-        &vk,
-    );
-    group.bench_function("message 64 bytes", |b| {
-        b.iter(|| prove_pkcs1v15_2048_64_enabled(&params, &vk, &pk))
-    });
-    let (params, vk, pk) = setup_pkcs1v15_2048_128_enabled();
-    save_params_pk_and_vk(
-        "benches/params_2048_128.bin",
-        "benches/2048_128.pk",
-        "benches/2048_128.vk",
-        &params,
-        &pk,
-        &vk,
-    );
-    group.bench_function("message 128 bytes", |b| {
-        b.iter(|| prove_pkcs1v15_2048_128_enabled(&params, &vk, &pk))
-    });
+    // let (params, vk, pk) = setup_pkcs1v15_2048_64_enabled();
+    // save_params_pk_and_vk(
+    //     "benches/params_2048_64.bin",
+    //     "benches/2048_64.pk",
+    //     "benches/2048_64.vk",
+    //     &params,
+    //     &pk,
+    //     &vk,
+    // );
+    // group.bench_function("message 64 bytes", |b| {
+    //     b.iter(|| prove_pkcs1v15_2048_64_enabled(&params, &vk, &pk))
+    // });
+    // let (params, vk, pk) = setup_pkcs1v15_2048_128_enabled();
+    // save_params_pk_and_vk(
+    //     "benches/params_2048_128.bin",
+    //     "benches/2048_128.pk",
+    //     "benches/2048_128.vk",
+    //     &params,
+    //     &pk,
+    //     &vk,
+    // );
+    // group.bench_function("message 128 bytes", |b| {
+    //     b.iter(|| prove_pkcs1v15_2048_128_enabled(&params, &vk, &pk))
+    // });
     let (params, vk, pk) = setup_pkcs1v15_2048_1024_enabled();
     save_params_pk_and_vk(
         "benches/params_2048_1024.bin",
@@ -299,8 +307,8 @@ fn bench_pkcs1v15_2048_disabled(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // bench_pkcs1v15_1024_enabled,
-    // bench_pkcs1v15_2048_enabled,
+    bench_pkcs1v15_1024_enabled,
+    bench_pkcs1v15_2048_enabled,
     bench_pkcs1v15_2048_disabled
 );
 criterion_main!(benches);

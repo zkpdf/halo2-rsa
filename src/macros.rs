@@ -36,7 +36,7 @@ use sha2::{Digest, Sha256};
 
 #[macro_export]
 macro_rules! impl_pkcs1v15_basic_circuit {
-    ($config_name:ident, $circuit_name:ident, $setup_fn_name:ident, $prove_fn_name:ident, $bits_len:expr, $msg_len:expr, $sha256_lookup_bits:expr, $sha256_lookup_advice:expr, $k:expr, $sha2_chip_enabled:expr) => {
+    ($config_name:ident, $circuit_name:ident, $setup_fn_name:ident, $prove_fn_name:ident, $bits_len:expr, $msg_len:expr, $num_flex_advice:expr, $num_range_advice:expr, $sha256_lookup_bits:expr, $sha256_lookup_advice:expr, $k:expr, $sha2_chip_enabled:expr) => {
         #[derive(Debug, Clone)]
         struct $config_name<F: PrimeField> {
             rsa_config: RSAConfig<F>,
@@ -56,10 +56,10 @@ macro_rules! impl_pkcs1v15_basic_circuit {
             const LIMB_WIDTH: usize = 64;
             const EXP_LIMB_BITS: usize = 5;
             const DEFAULT_E: u128 = 65537;
-            const NUM_ADVICE: usize = 80;
+            const NUM_ADVICE: usize = $num_flex_advice;
             const NUM_FIXED: usize = 1;
-            const NUM_LOOKUP_ADVICE: usize = 8;
-            const LOOKUP_BITS: usize = 12;
+            const NUM_LOOKUP_ADVICE: usize = $num_range_advice;
+            const LOOKUP_BITS: usize = $k - 1;
             const SHA256_LOOKUP_BITS: usize = $sha256_lookup_bits;
             const SHA256_LOOKUP_ADVICE: usize = $sha256_lookup_advice;
         }
