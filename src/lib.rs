@@ -215,7 +215,7 @@ impl<F: PrimeField> RSASignatureVerifier<F> {
         let sha256 = &mut self.sha256_config;
         let rsa = self.rsa_config.clone();
         let biguint = &rsa.biguint_config();
-        let result = sha256.digest(ctx, msg)?;
+        let result = sha256.digest(ctx, msg, None)?;
         let mut hashed_bytes = result.output_bytes;
         hashed_bytes.reverse();
         let bytes_bits = hashed_bytes.len() * 8;
