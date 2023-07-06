@@ -126,7 +126,8 @@ impl<'v, F: PrimeField> AssignedRSAPublicKey<'v, F> {
 /// RSA signature that is about to be assigned.
 #[derive(Clone, Debug)]
 pub struct RSASignature<F: PrimeField> {
-    c: Value<BigUint>,
+    /// an integer of the signature.
+    pub c: Value<BigUint>,
     _f: PhantomData<F>,
 }
 
@@ -151,7 +152,8 @@ impl<F: PrimeField> RSASignature<F> {
 /// An assigned RSA signature.
 #[derive(Clone, Debug)]
 pub struct AssignedRSASignature<'v, F: PrimeField> {
-    c: AssignedBigUint<'v, F, Fresh>,
+    /// an integer of the signature.
+    pub c: AssignedBigUint<'v, F, Fresh>,
 }
 
 impl<'v, F: PrimeField> AssignedRSASignature<'v, F> {
