@@ -7,19 +7,19 @@ pub use chip::*;
 pub use instructions::*;
 pub use utils::*;
 
-use halo2_base::{halo2_proofs::circuit::Value, utils::PrimeField, AssignedValue};
+use halo2_base::{halo2_proofs::circuit::Value, utils::BigPrimeField, AssignedValue};
 use halo2_ecc::bigint::{CRTInteger, OverflowInteger};
 use num_bigint::BigUint;
 
 #[derive(Debug, Clone)]
-pub struct AssignedBigUint<'v, F: PrimeField, T: RangeType> {
-    int: OverflowInteger<'v, F>,
-    value: Value<BigUint>,
+pub struct AssignedBigUint<F: BigPrimeField, T: RangeType> {
+    int: OverflowInteger<F>,
+    value: BigUint,
     _t: PhantomData<T>,
 }
 
-impl<'v, F: PrimeField, T: RangeType> AssignedBigUint<'v, F, T> {
-    pub fn new(int: OverflowInteger<'v, F>, value: Value<BigUint>) -> Self {
+impl<F: BigPrimeField, T: RangeType> AssignedBigUint<F, T> {
+    pub fn new(int: OverflowInteger<F>, value: BigUint) -> Self {
         Self {
             int,
             value,
@@ -35,15 +35,15 @@ impl<'v, F: PrimeField, T: RangeType> AssignedBigUint<'v, F, T> {
         self.int.limbs.len()
     }
 
-    pub fn limbs(&self) -> &[AssignedValue<'v, F>] {
+    pub fn limbs(&self) -> &[AssignedValue<F>] {
         &self.int.limbs
     }
 
-    pub fn value(&self) -> Value<BigUint> {
+    pub fn value(&self) -> BigUint {
         self.value.clone()
     }
 
-    pub fn extend_limbs(&self, num_extend_limbs: usize, zero_value: AssignedValue<'v, F>) -> Self {
+    pub fn extend_limbs(&self, num_extend_limbs: usize, zero_value: AssignedValue<F>) -> Self {
         let max_limb_bits = self.int_ref().max_limb_bits;
         let pre_num_limbs = self.num_limbs();
         let mut limbs = self.int.limbs.clone();
@@ -51,7 +51,7 @@ impl<'v, F: PrimeField, T: RangeType> AssignedBigUint<'v, F, T> {
             limbs.push(zero_value.clone());
         }
         assert_eq!(pre_num_limbs + num_extend_limbs, limbs.len());
-        let int = OverflowInteger::construct(limbs, max_limb_bits);
+        let int = OverflowInteger::new(limbs, max_limb_bits);
         Self::new(int, self.value())
     }
 
@@ -59,23 +59,23 @@ impl<'v, F: PrimeField, T: RangeType> AssignedBigUint<'v, F, T> {
         let max_limb_bits = self.int_ref().max_limb_bits;
         let value = self.value();
         let limbs = &self.int.limbs;
-        let int = OverflowInteger::construct(limbs[min..=max].to_vec(), max_limb_bits);
+        let int = OverflowInteger::new(limbs[min..=max].to_vec(), max_limb_bits);
         Self::new(int, value)
     }
 
-    pub fn int_ref(&'v self) -> &'v OverflowInteger<'v, F> {
+    pub fn int_ref(&self) -> &OverflowInteger<F> {
         &self.int
     }
 }
 
-impl<'v, F: PrimeField> AssignedBigUint<'v, F, Fresh> {
-    pub fn to_muled(self) -> AssignedBigUint<'v, F, Muled> {
+impl<F: BigPrimeField> AssignedBigUint<F, Fresh> {
+    pub fn to_muled(self) -> AssignedBigUint<F, Muled> {
         AssignedBigUint::new(self.int, self.value)
     }
 }
 
-impl<'v, F: PrimeField> AssignedBigUint<'v, F, Muled> {
-    pub(crate) fn to_fresh_unsafe(self) -> AssignedBigUint<'v, F, Fresh> {
+impl<F: BigPrimeField> AssignedBigUint<F, Muled> {
+    pub(crate) fn to_fresh_unsafe(self) -> AssignedBigUint<F, Fresh> {
         AssignedBigUint::new(self.int, self.value)
     }
 }
