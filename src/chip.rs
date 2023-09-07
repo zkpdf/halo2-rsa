@@ -273,6 +273,80 @@ impl<F: BigPrimeField> RSAConfig<F> {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use std::ops::Range;
+    use crate::big_uint::decompose_biguint;
+    use std::str::FromStr;
+    use super::*;
+    use halo2_base::halo2_proofs::{
+        dev::MockProver,
+        halo2curves::bn256::Fr,
+    };
+    use halo2_base::gates::RangeChip;
+    use halo2_base::gates::builder::{
+        GateThreadBuilder, RangeWithInstanceCircuitBuilder, RangeCircuitBuilder
+    };
+    use num_bigint::RandomBits;
+    use num_traits::FromPrimitive;
+    use rand::{thread_rng, Rng};
+
+    #[test]
+    fn test_rsa_modpow() {
+        // Uncomment to enable RUST_LOG
+        // env_logger::init();
+        
+        let k: usize = 18;
+
+        // Circuit inputs
+        let limb_bits = 64;
+        let default_bits = 2048;
+        let exp_bits = 5;
+        let default_e = 65537 as u32;
+        
+        // Configure builder
+        let mut builder = GateThreadBuilder::<Fr>::mock();
+
+        let lookup_bits: usize = k - 1;
+        // NOTE: Need to set var to load lookup table
+        std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
+
+        let range = RangeChip::<Fr>::default(lookup_bits);
+        let bigint_chip = BigUintConfig::construct(range, limb_bits);
+        let chip = RSAConfig::construct(bigint_chip, default_bits, exp_bits);
+        let ctx = builder.main(0);
+        let e_fix = RSAPubE::Fix(BigUint::from(default_e));
+        let n_big = BigUint::from_str("27333278531038650284292446400685983964543820405055158402397263907659995327446166369388984969315774410223081038389734916442552953312548988147687296936649645550823280957757266695625382122565413076484125874545818286099364801140117875853249691189224238587206753225612046406534868213180954324992542640955526040556053150097561640564120642863954208763490114707326811013163227280580130702236406906684353048490731840275232065153721031968704703853746667518350717957685569289022049487955447803273805415754478723962939325870164033644600353029240991739641247820015852898600430315191986948597672794286676575642204004244219381500407").unwrap();
+        let public_key = RSAPublicKey::new(n_big, e_fix);
+        let public_key = chip.assign_public_key(ctx, public_key);
+        let sign_big = BigUint::from_str("27166015521685750287064830171899789431519297967327068200526003963687696216659347317736779094212876326032375924944649760206771585778103092909024744594654706678288864890801000499430246054971129440518072676833029702477408973737931913964693831642228421821166326489172152903376352031367604507095742732994611253344812562891520292463788291973539285729019102238815435155266782647328690908245946607690372534644849495733662205697837732960032720813567898672483741410294744324300408404611458008868294953357660121510817012895745326996024006347446775298357303082471522757091056219893320485806442481065207020262668955919408138704593").unwrap();
+        let sign = RSASignature::new(sign_big);
+        let sign = chip.assign_signature(ctx, sign);
+        let hashed_msg_big = BigUint::from_str("83814198383102558219731078260892729932246618004265700685467928187377105751529").unwrap();
+        let hashed_msg_limbs = decompose_biguint::<Fr>(&hashed_msg_big, 4, 256/4);
+        let hashed_msg_assigned = hashed_msg_limbs.into_iter().map(|limb| ctx.load_witness(limb)).collect::<Vec<AssignedValue<Fr>>>();
+        let is_valid = chip.verify_pkcs1v15_signature(ctx, &public_key.unwrap(), &hashed_msg_assigned, &sign.unwrap());
+        chip.gate().assert_is_const(ctx, &is_valid.unwrap(), &Fr::one());
+        // println!("output: {:?}", output);
+
+        // Minimum rows is the number of rows used for blinding factors
+        // This depends on the circuit itself, but we can guess the number and change it if something breaks (default 9 usually works)
+        builder.config(k, Some(9));
+
+        // // Create mock circuit
+        // let circuit = RangeCircuitBuilder::mock(builder);
+
+        // // Run mock prover to ensure output is correct
+        // MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
+
+        // assert_eq!(output.value(), a.value() + b.value());
+        // for i in 0..a_limbs.len() {
+        //     assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
+        // }
+    }
+}
+
+
 // #[cfg(test)]
 // mod test {
 //     use std::str::FromStr;
