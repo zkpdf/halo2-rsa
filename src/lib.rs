@@ -12,19 +12,11 @@ use std::marker::PhantomData;
 
 pub use big_uint::*;
 
-use halo2_base::halo2_proofs::{plonk::Error};
-use halo2_base::QuantumCell;
 use halo2_base::{
-    gates::{flex_gate::FlexGateConfig, range::RangeConfig, GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, modulus, BigPrimeField},
-    AssignedValue, Context,
+    utils::BigPrimeField,
+    AssignedValue,
 };
-use halo2_ecc::bigint::{
-    big_is_equal, big_is_zero, big_less_than, carry_mod, mul_no_carry, negative, select, sub,
-    CRTInteger, FixedCRTInteger, FixedOverflowInteger, OverflowInteger,
-};
-use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, Signed, Zero};
+use num_bigint::BigUint;
 
 mod chip;
 mod instructions;

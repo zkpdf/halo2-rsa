@@ -1,12 +1,9 @@
 use crate::{
     AssignedBigUint, AssignedRSAPublicKey, AssignedRSASignature, Fresh, RSAPublicKey, RSASignature,
 };
-use halo2_base::halo2_proofs::{circuit::Region, circuit::Value, plonk::Error};
-use halo2_base::utils::fe_to_bigint;
-use halo2_base::QuantumCell;
+use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::{
-    gates::{flex_gate::FlexGateConfig, range::RangeConfig, GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, modulus, BigPrimeField},
+    utils::BigPrimeField,
     AssignedValue, Context,
 };
 /// Instructions for RSA operations.

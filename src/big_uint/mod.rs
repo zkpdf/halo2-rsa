@@ -7,8 +7,8 @@ pub use chip::*;
 pub use instructions::*;
 pub use utils::*;
 
-use halo2_base::{halo2_proofs::circuit::Value, utils::BigPrimeField, AssignedValue};
-use halo2_ecc::bigint::{CRTInteger, OverflowInteger};
+use halo2_base::{utils::BigPrimeField, AssignedValue};
+use halo2_ecc::bigint::OverflowInteger;
 use num_bigint::BigUint;
 
 #[derive(Debug, Clone)]

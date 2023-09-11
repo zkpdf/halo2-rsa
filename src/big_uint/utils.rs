@@ -1,11 +1,6 @@
-use halo2_base::{
-    utils::{
-        bigint_to_fe, biguint_to_fe, bit_length, decompose_bigint as _decompose_bigint,
-        decompose_biguint as _decompose_biguint, modulus, ScalarField, BigPrimeField
-    },
-};
-use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, Signed};
+use halo2_base::utils::{decompose_biguint as _decompose_biguint, BigPrimeField};
+use num_bigint::{BigInt, BigUint};
+use num_traits::Signed;
 
 pub fn decompose_bigint<F: BigPrimeField>(
     e: &BigInt,

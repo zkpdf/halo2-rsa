@@ -1,10 +1,7 @@
 use crate::{AssignedBigUint, Fresh, Muled, RangeType, RefreshAux};
-use halo2_base::halo2_proofs::circuit::Value;
-// use halo2wrong::halo2::{arithmetic::FieldExt, plonk::Error};
 use halo2_base::gates::{flex_gate::GateChip, range::RangeChip};
 use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::{utils::BigPrimeField, AssignedValue, Context};
-// use maingate::{AssignedValue, RegionCtx};
 use num_bigint::BigUint;
 
 /// Instructions for big-integer operations.

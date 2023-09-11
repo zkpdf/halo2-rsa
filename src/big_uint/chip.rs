@@ -1,21 +1,18 @@
-use std::marker::PhantomData;
-
-use super::utils::{decompose_bigint, decompose_biguint};
+use super::utils::decompose_biguint;
 use crate::{AssignedBigUint, BigUintInstructions, Fresh, Muled, RangeType, RefreshAux};
-use halo2_base::halo2_proofs::{plonk::Error};
+use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::utils::fe_to_bigint;
 use halo2_base::QuantumCell;
 use halo2_base::{
     gates::{flex_gate::GateChip, range::RangeChip, GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, modulus, BigPrimeField},
+    utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, BigPrimeField},
     AssignedValue, Context,
 };
 use halo2_ecc::bigint::{
-    big_is_equal, big_is_zero, big_less_than, carry_mod, mul_no_carry, negative, select, sub,
-    CRTInteger, FixedCRTInteger, ProperUint, FixedOverflowInteger, OverflowInteger,
+    big_is_equal, big_is_zero, mul_no_carry, select, sub, FixedOverflowInteger, OverflowInteger,
 };
 use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, Signed, Zero};
+use num_traits::{One, Zero};
 
 #[derive(Clone, Debug)]
 pub struct BigUintConfig<F: BigPrimeField> {
@@ -49,7 +46,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         let num_limbs = bit_len / self.limb_bits;
         let range = self.range();
         let limbs = decompose_biguint(&value, num_limbs, self.limb_bits);
-        println!("limbs: {:?}", limbs);
         let assigned_limbs: Vec<AssignedValue<F>> = limbs
             .into_iter()
             .map(|v| ctx.load_witness(v))
@@ -279,7 +275,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         a: &AssignedBigUint<F, Fresh>,
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<AssignedBigUint<F, Muled>, Error> {
-        let gate = self.gate();
         let n1 = a.num_limbs();
         let n2 = b.num_limbs();
         let num_limbs = n1 + n2 - 1;
@@ -438,7 +433,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
             // If `e_bit = 1`, update `acc` to `acc * squared`. Otherwise, use the same `acc`.
             acc = self.select(ctx, &muled, &acc, &e_bit)?;
             // Square `squared`.
-            squared = self.square_mod(ctx, &squared, n)?;
+            squared = self.square_mod(ctx, &squared, n).unwrap();
         }
         Ok(acc)
     }
@@ -472,7 +467,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         for e_bit in e_bits.into_iter() {
             let cur_sq = squared;
             // Square `squared`.
-            squared = self.square_mod(ctx, &cur_sq, n)?;
+            squared = self.square_mod(ctx, &cur_sq, n).unwrap();
             if !e_bit {
                 continue;
             }
@@ -828,9 +823,9 @@ mod test {
         dev::MockProver,
         halo2curves::bn256::Fr,
     };
-    use halo2_base::{gates::{RangeChip},};
+    use halo2_base::gates::RangeChip;
     use halo2_base::gates::builder::{
-        GateThreadBuilder, RangeWithInstanceCircuitBuilder, RangeCircuitBuilder
+        GateThreadBuilder, RangeCircuitBuilder
     };
 
     #[test]
@@ -870,18 +865,18 @@ mod test {
             ctx.load_witness(Fr::one()),
             ctx.load_witness(Fr::one()),
         ];
+        // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
         let a = AssignedBigUint::<Fr, Fresh>::new(
             OverflowInteger::new(a_limbs.clone(), limb_bits),
-            BigUint::from(1234 as u32),
+            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
         );
+        // 1 + 2^128 + 2^192 + 2^256 + 2^320
         let b = AssignedBigUint::<Fr, Fresh>::new(
             OverflowInteger::new(b_limbs.clone(), limb_bits),
-            BigUint::from(4321 as u32),
+            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
         );
 
         let output = chip.add(ctx, &a, &b).unwrap();
-
-        println!("output: {:?}", output);
 
         // Minimum rows is the number of rows used for blinding factors
         // This depends on the circuit itself, but we can guess the number and change it if something breaks (default 9 usually works)
