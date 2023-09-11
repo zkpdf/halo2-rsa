@@ -433,7 +433,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
             // If `e_bit = 1`, update `acc` to `acc * squared`. Otherwise, use the same `acc`.
             acc = self.select(ctx, &muled, &acc, &e_bit)?;
             // Square `squared`.
-            squared = self.square_mod(ctx, &squared, n).unwrap();
+            squared = self.square_mod(ctx, &squared, n).unwrap().into();
         }
         Ok(acc)
     }
@@ -467,7 +467,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         for e_bit in e_bits.into_iter() {
             let cur_sq = squared;
             // Square `squared`.
-            squared = self.square_mod(ctx, &cur_sq, n).unwrap();
+            squared = self.square_mod(ctx, &cur_sq, n).unwrap().into();
             if !e_bit {
                 continue;
             }
