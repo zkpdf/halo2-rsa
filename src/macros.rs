@@ -19,7 +19,7 @@ use halo2_base::{
     utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, modulus, PrimeField},
     AssignedValue, Context,
 };
-use halo2_dynamic_sha256::Sha256DynamicConfig;
+use halo2_dynamic_sha256::{Field, Sha256CompressionConfig, Sha256DynamicConfig};
 use halo2_ecc::bigint::{
     big_is_equal, big_is_zero, big_less_than, carry_mod, mul_no_carry, negative, select, sub,
     CRTInteger, FixedCRTInteger, FixedOverflowInteger, OverflowInteger,
@@ -36,35 +36,34 @@ use sha2::{Digest, Sha256};
 
 #[macro_export]
 macro_rules! impl_pkcs1v15_basic_circuit {
-    ($config_name:ident, $circuit_name:ident, $setup_fn_name:ident, $prove_fn_name:ident, $bits_len:expr, $msg_len:expr, $num_flex_advice:expr, $num_range_advice:expr, $sha256_lookup_bits:expr, $sha256_lookup_advice:expr, $k:expr, $sha2_chip_enabled:expr) => {
+    ($config_name:ident, $circuit_name:ident, $setup_fn_name:ident, $prove_fn_name:ident, $bits_len:expr, $msg_len:expr, $num_sha2_comp:expr, $k:expr, $sha2_chip_enabled:expr) => {
         #[derive(Debug, Clone)]
-        struct $config_name<F: PrimeField> {
+        struct $config_name<F: Field> {
             rsa_config: RSAConfig<F>,
             sha256_config: Option<Sha256DynamicConfig<F>>,
         }
 
-        struct $circuit_name<F: PrimeField> {
+        struct $circuit_name<F: Field> {
             signature: RSASignature<F>,
             public_key: RSAPublicKey<F>,
             msg: Vec<u8>,
             _f: PhantomData<F>,
         }
 
-        impl<F: PrimeField> $circuit_name<F> {
+        impl<F: Field> $circuit_name<F> {
             const BITS_LEN: usize = $bits_len;
             const MSG_LEN: usize = $msg_len;
             const LIMB_WIDTH: usize = 64;
             const EXP_LIMB_BITS: usize = 5;
             const DEFAULT_E: u128 = 65537;
-            const NUM_ADVICE: usize = $num_flex_advice;
+            const NUM_ADVICE: usize = 80;
             const NUM_FIXED: usize = 1;
-            const NUM_LOOKUP_ADVICE: usize = $num_range_advice;
-            const LOOKUP_BITS: usize = $k - 1;
-            const SHA256_LOOKUP_BITS: usize = $sha256_lookup_bits;
-            const SHA256_LOOKUP_ADVICE: usize = $sha256_lookup_advice;
+            const NUM_LOOKUP_ADVICE: usize = 8;
+            const LOOKUP_BITS: usize = 12;
+            const NUM_SHA2_COMP: usize = $num_sha2_comp;
         }
 
-        impl<F: PrimeField> Default for $circuit_name<F> {
+        impl<F: Field> Default for $circuit_name<F> {
             fn default() -> Self {
                 let num_limbs = Self::BITS_LEN / 64;
                 let signature = RSASignature::without_witness();
@@ -83,7 +82,7 @@ macro_rules! impl_pkcs1v15_basic_circuit {
             }
         }
 
-        impl<F: PrimeField> Circuit<F> for $circuit_name<F> {
+        impl<F: Field> Circuit<F> for $circuit_name<F> {
             type Config = $config_name<F>;
             type FloorPlanner = SimpleFloorPlanner;
 
@@ -106,15 +105,14 @@ macro_rules! impl_pkcs1v15_basic_circuit {
                 let rsa_config =
                     RSAConfig::construct(bigint_config, Self::BITS_LEN, Self::EXP_LIMB_BITS);
                 let sha256_config = if $sha2_chip_enabled {
-                    let sha256_config = Sha256DynamicConfig::configure(
-                        meta,
+                    let sha256_bit_configs = (0..Self::NUM_SHA2_COMP)
+                        .map(|_| Sha256CompressionConfig::configure(meta))
+                        .collect();
+                    Some(Sha256DynamicConfig::construct(
+                        sha256_bit_configs,
                         vec![Self::MSG_LEN],
                         range_config,
-                        Self::SHA256_LOOKUP_BITS,
-                        Self::SHA256_LOOKUP_ADVICE,
-                        true,
-                    );
-                    Some(sha256_config)
+                    ))
                 } else {
                     None
                 };
@@ -133,9 +131,7 @@ macro_rules! impl_pkcs1v15_basic_circuit {
                 let biguint_config = config.rsa_config.biguint_config();
                 let limb_bits = 64;
                 let num_limbs = Self::BITS_LEN / limb_bits;
-                if let Some(sha256_config) = config.sha256_config.as_ref() {
-                    sha256_config.load(&mut layouter)?;
-                }
+
                 biguint_config.range().load_lookup_table(&mut layouter)?;
                 let mut first_pass = SKIP_FIRST_PASS;
                 layouter.assign_region(

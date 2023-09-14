@@ -1,14 +1,8 @@
-use halo2_base::{
-    halo2_proofs::circuit::Value,
-    utils::{
-        bigint_to_fe, biguint_to_fe, bit_length, decompose_bigint as _decompose_bigint,
-        decompose_biguint as _decompose_biguint, modulus, PrimeField,
-    },
-};
-use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::{One, Signed};
+use halo2_base::utils::{decompose_biguint as _decompose_biguint, BigPrimeField};
+use num_bigint::{BigInt, BigUint};
+use num_traits::Signed;
 
-pub fn decompose_bigint<F: PrimeField>(
+pub fn decompose_bigint<F: BigPrimeField>(
     e: &BigInt,
     number_of_limbs: usize,
     limb_bits_len: usize,
@@ -23,7 +17,7 @@ pub fn decompose_bigint<F: PrimeField>(
     }
 }
 
-pub fn decompose_biguint<F: PrimeField>(
+pub fn decompose_biguint<F: BigPrimeField>(
     e: &BigUint,
     number_of_limbs: usize,
     limb_bits_len: usize,
@@ -92,7 +86,7 @@ pub(crate) fn big_pow_mod(a: &BigUint, b: &BigUint, n: &BigUint) -> BigUint {
     }
 }
 
-// pub(crate) struct CarryModParams<F: PrimeField> {
+// pub(crate) struct CarryModParams<F: ScalarField> {
 //     pub limb_bits: usize,
 //     pub num_limbs: usize,
 
@@ -107,7 +101,7 @@ pub(crate) fn big_pow_mod(a: &BigUint, b: &BigUint, n: &BigUint) -> BigUint {
 //     pub p_native: F,
 // }
 
-// impl<F: PrimeField> CarryModParams<F> {
+// impl<F: ScalarField> CarryModParams<F> {
 //     pub fn new(limb_bits: usize, num_limbs: usize, p: BigInt) -> Self {
 //         // https://github.com/axiom-crypto/halo2-lib/blob/main/halo2-ecc/src/fields/fp.rs#L96
 //         let limb_mask = (BigUint::from(1u64) << limb_bits) - 1usize;
