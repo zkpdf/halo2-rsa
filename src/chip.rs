@@ -116,7 +116,7 @@ impl<F: BigPrimeField> RSAInstructions<F> for RSAConfig<F> {
     ) -> Result<AssignedValue<F>, Error> {
         assert_eq!(self.biguint_config.limb_bits(), 64);
         let gate = self.gate();
-        let mut is_eq = ctx.load_constant(F::one());
+        let mut is_eq = ctx.load_constant(F::from(1));
         let powed = self.modpow_public_key(ctx, &signature.c, public_key)?;
         let hash_len = hashed_msg.len();
         assert_eq!(hash_len, 4);
