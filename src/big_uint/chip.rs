@@ -819,15 +819,8 @@ impl<F: BigPrimeField> BigUintConfig<F> {
 mod test {
     use std::str::FromStr;
     use super::*;
-    use halo2_base::halo2_proofs::{
-        dev::MockProver,
-        halo2curves::bn256::Fr,
-    };
-    use halo2_base::gates::RangeChip;
-    use halo2_base::gates::builder::{
-        GateThreadBuilder, RangeCircuitBuilder
-    };
-    use halo2_base::gates::builder::RangeChipBuilder;
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use halo2_base::utils::testing::base_test;
 
     #[test]
     fn test_add() {
@@ -839,60 +832,44 @@ mod test {
         // Circuit inputs
         let limb_bits = 64;
         
-        // Configure builder
-        let mut builder = GateThreadBuilder::<Fr>::mock();
+        base_test().k(k as u32).lookup_bits(k - 1).run(|ctx, range| {
+            // Configure range chip
+            let range = range.clone();
+            let chip = BigUintConfig::construct(range, 64);
+            let a_limbs = vec![
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+            ];
+            let b_limbs = vec![
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::zero()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+            ];
+            // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
+            let a = AssignedBigUint::<Fr, Fresh>::new(
+                OverflowInteger::new(a_limbs.clone(), limb_bits),
+                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
+            );
+            // 1 + 2^128 + 2^192 + 2^256 + 2^320
+            let b = AssignedBigUint::<Fr, Fresh>::new(
+                OverflowInteger::new(b_limbs.clone(), limb_bits),
+                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
+            );
 
-        let lookup_bits: usize = k - 1;
-        // NOTE: Need to set var to load lookup table
-        std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
-
-        // Configure range and sha1 chip
-        let range = RangeChip::default(lookup_bits);
-        let chip = BigUintConfig::construct(range, 64);
-        let ctx = builder.main(0);
-        let a_limbs = vec![
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-        ];
-        let b_limbs = vec![
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::zero()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-        ];
-        // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
-        let a = AssignedBigUint::<Fr, Fresh>::new(
-            OverflowInteger::new(a_limbs.clone(), limb_bits),
-            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
-        );
-        // 1 + 2^128 + 2^192 + 2^256 + 2^320
-        let b = AssignedBigUint::<Fr, Fresh>::new(
-            OverflowInteger::new(b_limbs.clone(), limb_bits),
-            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
-        );
-
-        let output = chip.add(ctx, &a, &b).unwrap();
-
-        // Minimum rows is the number of rows used for blinding factors
-        // This depends on the circuit itself, but we can guess the number and change it if something breaks (default 9 usually works)
-        builder.config(k, Some(9));
-
-        // Create mock circuit
-        let circuit = RangeCircuitBuilder::mock(builder);
-
-        // Run mock prover to ensure output is correct
-        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
-
-        assert_eq!(output.value(), a.value() + b.value());
-        for i in 0..a_limbs.len() {
-            assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
-        }
+            let output = chip.add(ctx, &a, &b).unwrap();
+            assert_eq!(output.value(), a.value() + b.value());
+            for i in 0..a_limbs.len() {
+                assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
+            }
+        });
+        
     }
 }
 
