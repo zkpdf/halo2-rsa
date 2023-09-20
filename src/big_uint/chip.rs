@@ -127,7 +127,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
                 limb = q;
             }
             // `limb` should be zero because we decomposed all bits of the `i`-th overflowing limb value into `self.limb_width` bits values.
-            gate.assert_is_const(ctx, &limb, &F::zero());
+            gate.assert_is_const(ctx, &limb, &F::from(0));
         }
         let range = self.range();
         for limb in refreshed_limbs.iter() {
@@ -148,7 +148,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
     ) -> Result<AssignedBigUint<F, T>, Error> {
         let int = select::assign(self.gate(), ctx, a.int.clone(), b.int.clone(), *sel);
         let value = {
-            if sel.value() == &F::one() {
+            if sel.value() == &F::from(1) {
                 a.value().clone()
             } else {
                 b.value().clone()
@@ -330,7 +330,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         // The number of limbs of `subed2` is `max(n.num_limbs(), subed1.num_limbs()) >= subed1.num_limbs()`.
         let added = self.add(ctx, a, n)?;
         let (subed2, is_overflowed2) = self.sub_unsafe(ctx, &added, b)?;
-        self.gate().assert_is_const(ctx, &is_overflowed2, &F::zero());
+        self.gate().assert_is_const(ctx, &is_overflowed2, &F::from(0));
         let result = self.select(ctx, &subed2, &subed1, &is_overflowed1)?;
         Ok(result.slice_limbs(0, result.num_limbs() - 2))
     }
@@ -396,7 +396,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
             AssignedBigUint::<F, Muled>::new(int, value)
         };
         let is_eq = self.is_equal_muled(ctx, &ab, &qn_prod, n1, n2)?;
-        gate.assert_is_const(ctx, &is_eq, &F::one());
+        gate.assert_is_const(ctx, &is_eq, &F::from(1));
         Ok(assign_prod)
     }
 
@@ -538,12 +538,12 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         // but this doesn't work because early sums might be negative.
         // So instead we verify that `a - b + word_max = word_max`.
         let limb_max = BigInt::from(1) << self.limb_bits;
-        let zero = ctx.load_constant(F::zero());
+        let zero = ctx.load_constant(F::from(0));
         let mut accumulated_extra = zero.clone();
         let mut carry = Vec::with_capacity(num_limbs);
         let mut cs = Vec::with_capacity(num_limbs);
         carry.push(zero.clone());
-        let mut eq_bit = ctx.load_constant(F::one());
+        let mut eq_bit = ctx.load_constant(F::from(1));
         let a_limbs = a.limbs();
         let b_limbs = b.limbs();
         for i in 0..num_limbs {
@@ -681,7 +681,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<(), Error> {
         let result = self.is_equal_fresh(ctx, a, b)?;
-        self.gate().assert_is_const(ctx, &result, &F::one());
+        self.gate().assert_is_const(ctx, &result, &F::from(1));
         Ok(())
     }
 
@@ -695,7 +695,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         num_limbs_r: usize,
     ) -> Result<(), Error> {
         let result = self.is_equal_muled(ctx, a, b, num_limbs_l, num_limbs_r)?;
-        self.gate().assert_is_const(ctx, &result, &F::one());
+        self.gate().assert_is_const(ctx, &result, &F::from(1));
         Ok(())
     }
 
@@ -707,7 +707,7 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<(), Error> {
         let result = self.is_in_field(ctx, a, b)?;
-        self.gate().assert_is_const(ctx, &result, &F::one());
+        self.gate().assert_is_const(ctx, &result, &F::from(1));
         Ok(())
     }
 }
@@ -790,7 +790,7 @@ impl<F: BigPrimeField> BigUintConfig<F> {
             QuantumCell::Existing(n),
             QuantumCell::Existing(a_prod_sub),
         );
-        gate.assert_is_const(ctx, &is_eq, &F::one());
+        gate.assert_is_const(ctx, &is_eq, &F::from(1));
         (q, n)
     }
 
@@ -819,14 +819,8 @@ impl<F: BigPrimeField> BigUintConfig<F> {
 mod test {
     use std::str::FromStr;
     use super::*;
-    use halo2_base::halo2_proofs::{
-        dev::MockProver,
-        halo2curves::bn256::Fr,
-    };
-    use halo2_base::gates::RangeChip;
-    use halo2_base::gates::builder::{
-        GateThreadBuilder, RangeCircuitBuilder
-    };
+    use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
+    use halo2_base::utils::testing::base_test;
 
     #[test]
     fn test_add() {
@@ -838,60 +832,44 @@ mod test {
         // Circuit inputs
         let limb_bits = 64;
         
-        // Configure builder
-        let mut builder = GateThreadBuilder::<Fr>::mock();
+        base_test().k(k as u32).lookup_bits(k - 1).run(|ctx, range| {
+            // Configure range chip
+            let range = range.clone();
+            let chip = BigUintConfig::construct(range, 64);
+            let a_limbs = vec![
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+            ];
+            let b_limbs = vec![
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::zero()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+                ctx.load_witness(Fr::one()),
+            ];
+            // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
+            let a = AssignedBigUint::<Fr, Fresh>::new(
+                OverflowInteger::new(a_limbs.clone(), limb_bits),
+                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
+            );
+            // 1 + 2^128 + 2^192 + 2^256 + 2^320
+            let b = AssignedBigUint::<Fr, Fresh>::new(
+                OverflowInteger::new(b_limbs.clone(), limb_bits),
+                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
+            );
 
-        let lookup_bits: usize = k - 1;
-        // NOTE: Need to set var to load lookup table
-        std::env::set_var("LOOKUP_BITS", lookup_bits.to_string());
-
-        // Configure range and sha1 chip
-        let range = RangeChip::default(lookup_bits);
-        let chip = BigUintConfig::construct(range, 64);
-        let ctx = builder.main(0);
-        let a_limbs = vec![
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-        ];
-        let b_limbs = vec![
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::zero()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-            ctx.load_witness(Fr::one()),
-        ];
-        // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
-        let a = AssignedBigUint::<Fr, Fresh>::new(
-            OverflowInteger::new(a_limbs.clone(), limb_bits),
-            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
-        );
-        // 1 + 2^128 + 2^192 + 2^256 + 2^320
-        let b = AssignedBigUint::<Fr, Fresh>::new(
-            OverflowInteger::new(b_limbs.clone(), limb_bits),
-            BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
-        );
-
-        let output = chip.add(ctx, &a, &b).unwrap();
-
-        // Minimum rows is the number of rows used for blinding factors
-        // This depends on the circuit itself, but we can guess the number and change it if something breaks (default 9 usually works)
-        builder.config(k, Some(9));
-
-        // Create mock circuit
-        let circuit = RangeCircuitBuilder::mock(builder);
-
-        // Run mock prover to ensure output is correct
-        MockProver::run(k as u32, &circuit, vec![]).unwrap().assert_satisfied();
-
-        assert_eq!(output.value(), a.value() + b.value());
-        for i in 0..a_limbs.len() {
-            assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
-        }
+            let output = chip.add(ctx, &a, &b).unwrap();
+            assert_eq!(output.value(), a.value() + b.value());
+            for i in 0..a_limbs.len() {
+                assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
+            }
+        });
+        
     }
 }
 
@@ -1109,7 +1087,7 @@ mod test {
 //                     let sub_assigned = config.assign_constant(ctx, sub)?;
 //                     let (ab, is_overflow) = config.sub_unsafe(ctx, &a_assigned, &b_assigned)?;
 //                     config.assert_equal_fresh(ctx, &ab, &sub_assigned)?;
-//                     config.gate().assert_is_const(ctx, &is_overflow, F::zero());
+//                     config.gate().assert_is_const(ctx, &is_overflow, F::from(0));
 //                     config.range().finalize(ctx);
 //                     {
 //                         println!("total advice cells: {}", ctx.total_advice);
@@ -1155,7 +1133,7 @@ mod test {
 //                     let b_assigned =
 //                         config.assign_integer(ctx, Value::known(b.clone()), Self::BITS_LEN)?;
 //                     let (_, is_overflow) = config.sub_unsafe(ctx, &a_assigned, &b_assigned)?;
-//                     config.gate().assert_is_const(ctx, &is_overflow, F::one());
+//                     config.gate().assert_is_const(ctx, &is_overflow, F::from(1));
 //                     config.range().finalize(ctx);
 //                     {
 //                         println!("total advice cells: {}", ctx.total_advice);
@@ -1580,7 +1558,7 @@ mod test {
 //                     let ab = config.add_mod(ctx, &a_assigned, &b_assigned, &n_assigned)?;
 //                     let ba = config.add_mod(ctx, &b_assigned, &a_assigned, &n_assigned)?;
 //                     let is_eq = config.is_equal_fresh(ctx, &ab, &ba)?;
-//                     config.gate().assert_is_const(ctx, &is_eq, F::one());
+//                     config.gate().assert_is_const(ctx, &is_eq, F::from(1));
 //                     config.range().finalize(ctx);
 //                     {
 //                         println!("total advice cells: {}", ctx.total_advice);
@@ -1627,7 +1605,7 @@ mod test {
 //                         config.assign_integer(ctx, Value::known(self.n.clone()), Self::BITS_LEN)?;
 //                     let ab = config.add_mod(ctx, &a_assigned, &b_assigned, &n_assigned)?;
 //                     let is_eq = config.is_equal_fresh(ctx, &ab, &n_assigned)?;
-//                     config.gate().assert_is_const(ctx, &is_eq, F::one());
+//                     config.gate().assert_is_const(ctx, &is_eq, F::from(1));
 //                     config.range().finalize(ctx);
 //                     {
 //                         println!("total advice cells: {}", ctx.total_advice);
@@ -2364,9 +2342,9 @@ mod test {
 //                     let n_assigned =
 //                         config.assign_integer(ctx, Value::known(self.n.clone()), Self::BITS_LEN)?;
 //                     let invalid = config.is_in_field(ctx, &n_assigned, &n_assigned)?;
-//                     config.gate().assert_is_const(ctx, &invalid, F::one());
+//                     config.gate().assert_is_const(ctx, &invalid, F::from(1));
 //                     let invalid = config.is_in_field(ctx, &a_assigned, &n_assigned)?;
-//                     config.gate().assert_is_const(ctx, &invalid, F::one());
+//                     config.gate().assert_is_const(ctx, &invalid, F::from(1));
 //                     config.range().finalize(ctx);
 //                     {
 //                         println!("total advice cells: {}", ctx.total_advice);
@@ -2402,7 +2380,7 @@ mod test {
 //     //                 let n = one.num_limbs();
 //     //                 let one_muled = bigint_chip.mul(ctx, &one, &one)?;
 //     //                 let zero = AssignedLimb::from(
-//     //                     bigint_chip.main_gate().assign_constant(ctx, F::zero())?,
+//     //                     bigint_chip.main_gate().assign_constant(ctx, F::from(0))?,
 //     //                 );
 //     //                 bigint_chip.assert_equal_muled(ctx, &one.to_muled(zero), &one_muled, n, n)?;
 //     //                 Ok(())
