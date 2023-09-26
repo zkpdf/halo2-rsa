@@ -75,7 +75,7 @@ impl<F: BigPrimeField> AssignedBigUint<F, Fresh> {
 }
 
 impl<F: BigPrimeField> AssignedBigUint<F, Muled> {
-    pub(crate) fn to_fresh_unsafe(self) -> AssignedBigUint<F, Fresh> {
+    pub fn to_fresh_unsafe(self) -> AssignedBigUint<F, Fresh> {
         AssignedBigUint::new(self.int, self.value)
     }
 }
@@ -141,19 +141,6 @@ impl RefreshAux {
             }
             muled.push(sum);
         }
-        // for i in 0..d {
-        //     let mut j = if num_limbs_r >= i + 1 {
-        //         0
-        //     } else {
-        //         i + 1 - num_limbs_r
-        //     };
-        //     muled.push(BigUint::from(0usize));
-        //     while j < num_limbs_l && j <= i {
-        //         let k = i - j;
-        //         muled[i] += &l_max[j] * &r_max[k];
-        //         j += 1;
-        //     }
-        // }
         let mut increased_limbs_vec = Vec::new();
         let mut cur_d = 0;
         let max_d = d;
