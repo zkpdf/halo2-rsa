@@ -1,4 +1,4 @@
-use crate::{AssignedBigUint, Fresh, Muled, RangeType, RefreshAux};
+use crate::{AssignedBigUint, Fresh, Muled, RangeType};
 use halo2_base::gates::{flex_gate::GateChip, range::RangeChip};
 use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::{utils::BigPrimeField, AssignedValue, Context};
@@ -36,14 +36,6 @@ pub trait BigUintInstructions<F: BigPrimeField> {
         num_limbs: usize,
     ) -> Result<AssignedBigUint<F, Fresh>, Error>;
 
-    /// Converts a [`Muled`] type integer to a [`Fresh`] type integer.
-    fn refresh(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Muled>,
-        aux: &RefreshAux,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error>;
-
     /// Given a bit value `sel`, return `a` if `a`=1 and `b` otherwise.
     fn select<T: RangeType>(
         &self,
@@ -52,14 +44,6 @@ pub trait BigUintInstructions<F: BigPrimeField> {
         b: &AssignedBigUint<F, T>,
         sel: &AssignedValue<F>,
     ) -> Result<AssignedBigUint<F, T>, Error>;
-
-    /// Given two inputs `a,b`, performs the addition `a + b`.
-    fn add(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error>;
 
     /// Given two inputs `a,b`, performs the subtraction `a - b`.
     /// The result is correct iff `a>=b`.
@@ -77,31 +61,6 @@ pub trait BigUintInstructions<F: BigPrimeField> {
         a: &AssignedBigUint<F, Fresh>,
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<AssignedBigUint<F, Muled>, Error>;
-
-    /// Given a inputs `a`, performs the square `a^2`.
-    fn square(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Muled>, Error>;
-
-    /// Given two inputs `a,b` and a modulus `n`, performs the modular addition `a + b mod n`.
-    fn add_mod(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-        n: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error>;
-
-    /// Given two inputs `a,b` and a modulus `n`, performs the modular subtraction `a - b mod n`.
-    fn sub_mod(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-        n: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error>;
 
     /// Given two inputs `a,b` and a modulus `n`, performs the modular multiplication `a * b mod n`.
     fn mul_mod(
@@ -139,13 +98,6 @@ pub trait BigUintInstructions<F: BigPrimeField> {
         n: &AssignedBigUint<F, Fresh>,
     ) -> Result<AssignedBigUint<F, Fresh>, Error>;
 
-    /// Returns an assigned bit representing whether `a` is zero or not.
-    fn is_zero(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error>;
-
     /// Returns an assigned bit representing whether `a` and `b` are equivalent, whose [`RangeType`] is [`Fresh`].
     fn is_equal_fresh(
         &self,
@@ -166,30 +118,6 @@ pub trait BigUintInstructions<F: BigPrimeField> {
 
     /// Returns an assigned bit representing whether `a` is less than `b` (`a<b`).
     fn is_less_than(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error>;
-
-    /// Returns an assigned bit representing whether `a` is less than or equal to `b` (`a<=b`).
-    fn is_less_than_or_equal(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error>;
-
-    /// Returns an assigned bit representing whether `a` is greater than `b` (`a>b`).
-    fn is_greater_than(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error>;
-
-    /// Returns an assigned bit representing whether `a` is greater than or equal to `b` (`a>=b`).
-    fn is_greater_than_or_equal(
         &self,
         ctx: &mut Context<F>,
         a: &AssignedBigUint<F, Fresh>,

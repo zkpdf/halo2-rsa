@@ -1,18 +1,19 @@
 use super::utils::decompose_biguint;
-use crate::{AssignedBigUint, BigUintInstructions, Fresh, Muled, RangeType, RefreshAux};
+use crate::{AssignedBigUint, BigUintInstructions, Fresh, Muled, RangeType};
 use halo2_base::halo2_proofs::plonk::Error;
 use halo2_base::utils::fe_to_bigint;
 use halo2_base::QuantumCell;
 use halo2_base::{
     gates::{flex_gate::GateChip, range::RangeChip, GateInstructions, RangeInstructions},
-    utils::{bigint_to_fe, biguint_to_fe, fe_to_biguint, BigPrimeField},
+    utils::{bigint_to_fe, biguint_to_fe, BigPrimeField},
     AssignedValue, Context,
 };
 use halo2_ecc::bigint::{
-    big_is_equal, big_is_zero, mul_no_carry, select, sub, FixedOverflowInteger, OverflowInteger,
+    big_is_equal, mul_no_carry, select, sub, FixedOverflowInteger, OverflowInteger,
 };
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::{One, Zero};
+use itertools::Itertools;
 
 #[derive(Clone, Debug)]
 pub struct BigUintConfig<F: BigPrimeField> {
@@ -78,66 +79,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         self.assign_constant(ctx, value)
     }
 
-    fn refresh(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Muled>,
-        aux: &RefreshAux,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error> {
-        // For converting `a` to a [`Fresh`] type integer, we decompose each limb of `a` into `self.limb_width`-bits values.
-        assert_eq!(self.limb_bits, aux.limb_bits);
-        // The i-th value of `aux.increased_limbs_vec` represents the number of increased values when converting i-th limb of `a` into `self.limb_width`-bits values.
-        let increased_limbs_vec = aux.increased_limbs_vec.clone();
-        let num_limbs_l = aux.num_limbs_l;
-        let num_limbs_r = aux.num_limbs_r;
-        // The following assertion holds since `a` is the product of two integers `l` and `r` whose number of limbs is `num_limbs_l` and `num_limbs_r`, respectively.
-        assert_eq!(a.num_limbs(), num_limbs_l + num_limbs_r - 1);
-        let num_limbs_fresh = increased_limbs_vec.len();
-
-        let gate = self.gate();
-        let mut refreshed_limbs = Vec::with_capacity(num_limbs_fresh);
-        let zero_assigned = ctx.load_zero();
-        let a_limbs = a.limbs();
-        for i in 0..a.num_limbs() {
-            refreshed_limbs.push(a_limbs[i].clone());
-        }
-        for _ in 0..(num_limbs_fresh - a.num_limbs()) {
-            refreshed_limbs.push(zero_assigned.clone());
-        }
-        let limb_max = BigInt::from(1u64) << self.limb_bits;
-        for i in 0..num_limbs_fresh {
-            // `i`-th overflowing limb value.
-            let mut limb = refreshed_limbs[i].clone();
-            for j in 0..(increased_limbs_vec[i] + 1) {
-                // `n` is lower `self.limb_width` bits of `limb`.
-                // `q` is any other upper bits.
-                let (q, n) = self.div_mod_unsafe(ctx, &limb, &limb_max);
-                if j == 0 {
-                    // When `j=0`, `n` is a new `i`-th limb value.
-                    refreshed_limbs[i] = n;
-                } else {
-                    // When `j>0`, `n` is carried to the `i+j`-th limb.
-                    refreshed_limbs[i + j] = gate.add(
-                        ctx,
-                        QuantumCell::Existing(refreshed_limbs[i + j]),
-                        QuantumCell::Existing(n),
-                    );
-                }
-                // We use `q` as the next `limb`.
-                limb = q;
-            }
-            // `limb` should be zero because we decomposed all bits of the `i`-th overflowing limb value into `self.limb_width` bits values.
-            gate.assert_is_const(ctx, &limb, &F::from(0));
-        }
-        let range = self.range();
-        for limb in refreshed_limbs.iter() {
-            range.range_check(ctx, *limb, self.limb_bits);
-        }
-        let int = OverflowInteger::new(refreshed_limbs, self.limb_bits);
-        let new_assigned_int = AssignedBigUint::new(int, a.value());
-        Ok(new_assigned_int)
-    }
-
     /// Given a bit value `sel`, return `a` if `a`=1 and `b` otherwise.
     fn select<T: RangeType>(
         &self,
@@ -156,70 +97,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         };
 
         Ok(AssignedBigUint::new(int, value))
-    }
-
-    /// Given two inputs `a,b`, performs the addition `a + b`.
-    fn add(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error> {
-        let gate = self.gate();
-        let range = self.range();
-        let out_value = a.value.clone() + b.value.clone();
-        let n1 = a.num_limbs();
-        let n2 = b.num_limbs();
-        let max_n = if n1 < n2 { n2 } else { n1 };
-        let zero_value = ctx.load_zero();
-        let a = a.extend_limbs(max_n - n1, zero_value.clone());
-        let b = b.extend_limbs(max_n - n2, zero_value.clone());
-
-        // Compute a sum and a carry for each limb values.
-        let mut c_vals = Vec::with_capacity(max_n);
-        let mut carrys = Vec::with_capacity(max_n + 1);
-        carrys.push(zero_value);
-        let limb_max = BigUint::from(1usize) << self.limb_bits;
-        let limb_max_f = biguint_to_fe(&limb_max);
-        for i in 0..max_n {
-            let a_b = gate.add(
-                ctx,
-                QuantumCell::Existing(*a.limb(i)),
-                QuantumCell::Existing(*b.limb(i)),
-            );
-            let sum = gate.add(
-                ctx,
-                QuantumCell::Existing(a_b),
-                QuantumCell::Existing(carrys[i]),
-            );
-            let sum_big = fe_to_biguint(sum.value());
-            // `c_val_f` is lower `self.limb_bits` bits of `a + b + carrys[i]`.
-            let c_val = biguint_to_fe::<F>(&(&sum_big.clone() % &limb_max));
-            let carry_val = biguint_to_fe::<F>(&(sum_big >> self.limb_bits));
-            // `c` and `carry` should fit in `self.limb_bits` bits.
-            let c = ctx.load_witness(c_val);
-            range.range_check(ctx, c, self.limb_bits);
-            let carry = ctx.load_witness(carry_val);
-            range.range_check(ctx, carry, self.limb_bits);
-            let c_add_carry = gate.mul_add(
-                ctx,
-                QuantumCell::Existing(carry),
-                QuantumCell::Constant(limb_max_f),
-                QuantumCell::Existing(c),
-            );
-            // `a + b + carrys[i] == c + carry`
-            gate.is_equal(
-                ctx,
-                QuantumCell::Existing(sum),
-                QuantumCell::Existing(c_add_carry),
-            );
-            c_vals.push(c);
-            carrys.push(carry);
-        }
-        // Add the last carry to the `c_vals`.
-        c_vals.push(carrys[max_n].clone());
-        let int = OverflowInteger::new(c_vals, self.limb_bits);
-        Ok(AssignedBigUint::new(int, out_value))
     }
 
     /// Given two inputs `a,b`, performs the subtraction `a - b`.
@@ -249,19 +126,21 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         let b = b.extend_limbs(max_n - n2, zero_value.clone());
         let limb_base = biguint_to_fe::<F>(&(BigUint::one() << self.limb_bits));
         
-        // TODO: Underconstrained? Convert overflow int to proper int
+        // TODO: Assumes that a and b do not overflow. Currently only used in testing
         let a_proper = FixedOverflowInteger::construct(
             a.limbs().iter().map(|x| *x.value()).collect()
         ).assign(ctx);
         let b_proper = FixedOverflowInteger::construct(
             b.limbs().iter().map(|x| *x.value()).collect()
         ).assign(ctx);
+        a.limbs().iter().zip(a_proper.limbs().iter()).map(|(x, y)| ctx.constrain_equal(x, y)).collect_vec();
+        b.limbs().iter().zip(b_proper.limbs().iter()).map(|(x, y)| ctx.constrain_equal(x, y)).collect_vec();
 
         let (int, overflow) =
             sub::assign(self.range(), ctx, a_proper, b_proper, self.limb_bits, limb_base);
         // let int_neg = negative::assign(gate, ctx, &int);
         let is_overflow_zero = gate.is_zero(ctx, overflow);
-        let is_overflow = gate.not(ctx, QuantumCell::Existing(is_overflow_zero));
+        let is_overflow = gate.not(ctx, is_overflow_zero);
         // let actual_int = select::assign(gate, ctx, &int_neg, &int, &is_overflow);
         let value = {
             if a.value >= b.value { a.value - b.value } else { BigUint::zero() }
@@ -287,53 +166,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         Ok(AssignedBigUint::new(int, value))
     }
 
-    fn square(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Muled>, Error> {
-        self.mul(ctx, a, a)
-    }
-
-    /// Given two inputs `a,b` and a modulus `n`, performs the modular addition `a + b mod n`.
-    fn add_mod(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-        n: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error> {
-        // 1. Compute `a + b`.
-        // 2. Compute `a + b - n`.
-        // 3. If the subtraction is overflowed, i.e., `a + b < n`, returns `a + b`. Otherwise, returns `a + b - n`.
-        let added = self.add(ctx, a, b)?;
-        // The number of limbs of `subed` is `added.num_limbs() = max(a.num_limbs(), b.num_limbs()) + 1`.
-        let (subed, is_overflow) = self.sub_unsafe(ctx, &added, n)?;
-        let result = self.select(ctx, &added, &subed, &is_overflow)?;
-        Ok(result.slice_limbs(0, result.num_limbs() - 2))
-    }
-
-    /// Given two inputs `a,b` and a modulus `n`, performs the modular subtraction `a - b mod n`.
-    fn sub_mod(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-        n: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedBigUint<F, Fresh>, Error> {
-        // 1. Compute `a - b`.
-        // 2. Compute `(a + n) - b = a - b + n`.
-        // 3. If the subtraction in 1 is overflowed, i.e., `a - b < 0`, returns `a - b + n`. Otherwise, returns `a - b`.
-        // The number of limbs of `subed1` is `max(a.num_limbs(), b.num_limbs())`.
-        let (subed1, is_overflowed1) = self.sub_unsafe(ctx, a, b)?;
-        // If `is_overflowed1=1`, `subed2` is equal to `a - b + n` because `subed1` is `b - a` in that case.
-        // The number of limbs of `subed2` is `max(n.num_limbs(), subed1.num_limbs()) >= subed1.num_limbs()`.
-        let added = self.add(ctx, a, n)?;
-        let (subed2, is_overflowed2) = self.sub_unsafe(ctx, &added, b)?;
-        self.gate().assert_is_const(ctx, &is_overflowed2, &F::from(0));
-        let result = self.select(ctx, &subed2, &subed1, &is_overflowed1)?;
-        Ok(result.slice_limbs(0, result.num_limbs() - 2))
-    }
 
     /// Given two inputs `a,b` and a modulus `n`, performs the modular multiplication `a * b mod n`.
     ///
@@ -477,20 +309,6 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         Ok(acc)
     }
 
-    /// Returns an assigned bit representing whether `a` is zero or not.
-    fn is_zero(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error> {
-        // TODO: Underconstrained
-        let a_proper = FixedOverflowInteger::construct(
-            a.limbs().iter().map(|x| *x.value()).collect()
-        ).assign(ctx);
-        let out = big_is_zero::assign(self.gate(), ctx, a_proper);
-        Ok(out)
-    }
-
     /// Returns an assigned bit representing whether `a` and `b` are equivalent, whose [`RangeType`] is [`Fresh`].
     fn is_equal_fresh(
         &self,
@@ -498,12 +316,15 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         a: &AssignedBigUint<F, Fresh>,
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<AssignedValue<F>, Error> {
+        // TODO: Assumes that a and b do not overflow. Currently only used in testing
         let a_proper = FixedOverflowInteger::construct(
             a.limbs().iter().map(|x| *x.value()).collect()
         ).assign(ctx);
         let b_proper = FixedOverflowInteger::construct(
             b.limbs().iter().map(|x| *x.value()).collect()
         ).assign(ctx);
+        a.limbs().iter().zip(a_proper.limbs().iter()).map(|(x, y)| ctx.constrain_equal(x, y)).collect_vec();
+        b.limbs().iter().zip(b_proper.limbs().iter()).map(|(x, y)| ctx.constrain_equal(x, y)).collect_vec();
         Ok(big_is_equal::assign(self.gate(), ctx, a_proper, b_proper))
     }
 
@@ -614,53 +435,11 @@ impl<F: BigPrimeField> BigUintInstructions<F> for BigUintConfig<F> {
         a: &AssignedBigUint<F, Fresh>,
         b: &AssignedBigUint<F, Fresh>,
     ) -> Result<AssignedValue<F>, Error> {
-        let (_, is_overfloe) = self.sub_unsafe(ctx, a, b)?;
+        let (_, is_overflow) = self.sub_unsafe(ctx, a, b)?;
         // let gate = self.gate();
         // let is_overflow_zero = gate.is_zero(ctx, &overflow);
-        // let is_overfloe = gate.not(ctx, QuantumCell::Existing(&is_overflow_zero));
-        Ok(is_overfloe)
-    }
-
-    /// Returns an assigned bit representing whether `a` is less than or equal to `b` (`a<=b`).
-    fn is_less_than_or_equal(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error> {
-        let is_less = self.is_less_than(ctx, a, b)?;
-        let is_eq = self.is_equal_fresh(ctx, a, b)?;
-        let gate = self.gate();
-        let is_not_eq = gate.not(ctx, QuantumCell::Existing(is_eq));
-        Ok(gate.and(
-            ctx,
-            QuantumCell::Existing(is_less),
-            QuantumCell::Existing(is_not_eq),
-        ))
-    }
-
-    /// Returns an assigned bit representing whether `a` is greater than `b` (`a>b`).
-    fn is_greater_than(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error> {
-        let is_less_than_or_eq = self.is_less_than_or_equal(ctx, a, b)?;
-        Ok(self
-            .gate()
-            .not(ctx, QuantumCell::Existing(is_less_than_or_eq)))
-    }
-
-    /// Returns an assigned bit representing whether `a` is greater than or equal to `b` (`a>=b`).
-    fn is_greater_than_or_equal(
-        &self,
-        ctx: &mut Context<F>,
-        a: &AssignedBigUint<F, Fresh>,
-        b: &AssignedBigUint<F, Fresh>,
-    ) -> Result<AssignedValue<F>, Error> {
-        let is_less_than = self.is_less_than(ctx, a, b)?;
-        Ok(self.gate().not(ctx, QuantumCell::Existing(is_less_than)))
+        // let is_overflow = gate.not(ctx, QuantumCell::Existing(&is_overflow_zero));
+        Ok(is_overflow)
     }
 
     /// Returns an assigned bit representing whether `a` is in the order-`n` finite field.
@@ -738,22 +517,6 @@ impl<F: BigPrimeField> BigUintConfig<F> {
         num_limbs
     }
 
-    // fn native_modulus_uint() -> BigUint {
-    //     modulus::<F>()
-    // }
-
-    // fn native_modulus_int() -> BigInt {
-    //     BigInt::from_biguint(Sign::Plus, modulus::<F>())
-    // }
-
-    // fn compute_max_mul(&self, num_limbs_l: usize, num_limbs_r: usize) -> BigInt {
-    //     // let one = BigInt::from(1u64);
-    //     // let l_max = &(BigInt::from(1u64) << (self.limb_bits * num_limbs_l)) - &one;
-    //     // let r_max = &(BigInt::from(1u64) << (self.limb_bits * num_limbs_r)) - &one;
-    //     // l_max * r_max + one
-    //     BigInt::from(1u64) << (self.limb_bits * (num_limbs_l + num_limbs_r))
-    // }
-
     /// Returns the maximum limb size of [`Muled`] type integers.
     fn compute_muled_limb_max(limb_width: usize, min_n: usize) -> BigInt {
         let one = BigInt::from(1usize);
@@ -794,82 +557,106 @@ impl<F: BigPrimeField> BigUintConfig<F> {
         (q, n)
     }
 
-    // fn carry_mod(
-    //     &self,
-    //     ctx: &mut Context<F>,
-    //     a: &CRTInteger<F>,
-    //     carry_mod_params: CarryModParams<F>,
-    // ) -> CRTInteger<F> {
-    //     carry_mod::crt(
-    //         self.range(),
-    //         ctx,
-    //         &a,
-    //         carry_mod_params.num_limbs_bits,
-    //         &carry_mod_params.p,
-    //         &carry_mod_params.p_limbs,
-    //         carry_mod_params.p_native,
-    //         carry_mod_params.limb_bits,
-    //         &carry_mod_params.limb_bases,
-    //         &carry_mod_params.limb_base_big,
-    //     )
-    // }
 }
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
     use super::*;
     use halo2_base::halo2_proofs::halo2curves::bn256::Fr;
     use halo2_base::utils::testing::base_test;
+    use num_bigint::RandomBits;
+    use rand::{thread_rng, Rng};
 
     #[test]
-    fn test_add() {
-        // Uncomment to enable RUST_LOG
-        // env_logger::init();
-        
-        let k: usize = 18;
+    fn test_sub_circuit() {
+        let k: usize = 13;
 
         // Circuit inputs
         let limb_bits = 64;
-        
-        base_test().k(k as u32).lookup_bits(k - 1).run(|ctx, range| {
-            // Configure range chip
-            let range = range.clone();
-            let chip = BigUintConfig::construct(range, 64);
-            let a_limbs = vec![
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-            ];
-            let b_limbs = vec![
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::zero()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-                ctx.load_witness(Fr::one()),
-            ];
-            // 1 + 2^64 + 2^128 + 2^192 + 2^256 + 2^320
-            let a = AssignedBigUint::<Fr, Fresh>::new(
-                OverflowInteger::new(a_limbs.clone(), limb_bits),
-                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699682310826844728852481").unwrap(),
-            );
-            // 1 + 2^128 + 2^192 + 2^256 + 2^320
-            let b = AssignedBigUint::<Fr, Fresh>::new(
-                OverflowInteger::new(b_limbs.clone(), limb_bits),
-                BigUint::from_str("2135987035920910082510813795406868310032552609100727358564487664277988894699663864082771019300865").unwrap(),
-            );
+        let default_bits = 2048;
 
-            let output = chip.add(ctx, &a, &b).unwrap();
-            assert_eq!(output.value(), a.value() + b.value());
-            for i in 0..a_limbs.len() {
-                assert_eq!(*output.limb(i).value(), a_limbs[i].value() + b_limbs[i].value());
+        base_test().k(k as u32).lookup_bits(k - 1).run(|ctx, range| {
+            let mut rng = thread_rng();
+            let range = range.clone();
+            let bigint_chip = BigUintConfig::construct(range, limb_bits);
+            let mut n = BigUint::default();
+            while n.bits() != default_bits {
+                n = rng.sample(RandomBits::new(default_bits));
             }
+            let a = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let b = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let b = &b >> 128;
+            let a_assigned =
+                bigint_chip.assign_integer(ctx, &a, default_bits as usize).unwrap();
+            let b_assigned =
+                bigint_chip.assign_integer(ctx, &b, default_bits as usize).unwrap();
+            let sub = &a - &b;
+            let sub_assigned = bigint_chip.assign_constant(ctx, sub).unwrap();
+            let (ab, is_overflow) = bigint_chip.sub_unsafe(ctx, &a_assigned, &b_assigned).unwrap();
+            bigint_chip.assert_equal_fresh(ctx, &ab, &sub_assigned).unwrap();
+            bigint_chip.gate().assert_is_const(ctx, &is_overflow, &Fr::zero());
         });
-        
+    }
+
+    #[test]
+    fn test_overflow_sub_circuit() {
+        let k: usize = 13;
+
+        // Circuit inputs
+        let limb_bits = 64;
+        let default_bits = 2048;
+
+        base_test().k(k as u32).lookup_bits(k - 1).run(|ctx, range| {
+            let mut rng = thread_rng();
+            let range = range.clone();
+            let bigint_chip = BigUintConfig::construct(range, limb_bits);
+            let mut n = BigUint::default();
+            while n.bits() != default_bits {
+                n = rng.sample(RandomBits::new(default_bits));
+            }
+            let a = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let a = &a >> 128;
+            let b = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let a_assigned =
+                bigint_chip.assign_integer(ctx, &a, default_bits as usize).unwrap();
+            let b_assigned =
+                bigint_chip.assign_integer(ctx, &b, default_bits as usize).unwrap();
+            let (_, is_overflow) = bigint_chip.sub_unsafe(ctx, &a_assigned, &b_assigned).unwrap();
+            println!("is overflow: {:?}", is_overflow);
+            bigint_chip.gate().assert_is_const(ctx, &is_overflow, &Fr::from(1));
+        });
+    }
+    
+    #[test]
+    fn test_bad_sub_circuit() {
+        let k: usize = 13;
+
+        // Circuit inputs
+        let limb_bits = 64;
+        let default_bits = 2048;
+
+        base_test().k(k as u32).lookup_bits(k - 1).expect_satisfied(false).run(|ctx, range| {
+            let mut rng = thread_rng();
+            let range = range.clone();
+            let bigint_chip = BigUintConfig::construct(range, limb_bits);
+            let mut n = BigUint::default();
+            while n.bits() != default_bits {
+                n = rng.sample(RandomBits::new(default_bits));
+            }
+            let a = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let b = rng.sample::<BigUint, _>(RandomBits::new(default_bits)) % &n;
+            let b = &b >> 128;
+            let a_assigned =
+                bigint_chip.assign_integer(ctx, &a, default_bits as usize).unwrap();
+            let b_assigned =
+                bigint_chip.assign_integer(ctx, &b, default_bits as usize).unwrap();
+            let n_assigned =
+                bigint_chip.assign_integer(ctx, &n, default_bits as usize).unwrap();
+            let (ab, _) = bigint_chip.sub_unsafe(ctx, &a_assigned, &b_assigned).unwrap();
+            bigint_chip.assert_equal_fresh(ctx, &ab, &n_assigned).unwrap();
+        });
+
+        // TODO: Rest of tests
     }
 }
 

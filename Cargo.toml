@@ -23,6 +23,7 @@ halo2-ecc = { branch = "community-edition", default-features = false, features =
 ], git = "https://github.com/axiom-crypto/halo2-lib.git"}
 num-traits = "0.2.15"
 env_logger = "0.10.0"
+itertools = "0.10.3"
 
 [dev-dependencies]
 criterion = "0.4"
